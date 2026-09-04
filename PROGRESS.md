@@ -40,10 +40,10 @@ else stays clean. This is what the judges want to see.
 
 ## Task list & status
 
-- [ ] **Scaffold repo** (git, workspaces, root files) — in progress
-- [ ] **Guardian core** (aave/policy/guard/workflows/keeperhub adapter/composer/baseline/state)
+- [x] **Scaffold repo** (git, workspaces, root files) — done, pushed
+- [x] **Guardian core** (aave/policy/guard/workflows/keeperhub adapter/composer/baseline/state)
 - [ ] **Live KeeperHub adapter** + re-run read-only discovery against real KeeperHub API
-- [ ] **Simulator + monitor + SSE server + CLI** (offline chaos scenarios)
+- [x] **Simulator + monitor + SSE server + CLI** (offline chaos scenarios) — storm verified green
 - [ ] **Guardian tests** (should all pass)
 - [ ] **Ballast screen** (gauge UI, storm table, rescue animation, ship's log)
 - [ ] **End-to-end demo + README**
@@ -59,6 +59,24 @@ else stays clean. This is what the judges want to see.
 - Found your GitHub repo `Temmygabriel/BALLAST` exists and is empty (reachable).
 - Wrote memory notes about you + the project.
 
+### 2026-09-04 — Guardian engine green offline 🎉
+- Built all guardian modules: config, aave, policy, guard, workflows, composer (+deterministic
+  fallback + optional DeepSeek), baseline (naive failure reasons), state, MockKeeperHub, live
+  adapter skeleton, rescue, simulator, monitor, SSE server, CLI.
+- Root monorepo scaffolded (npm workspaces guardian + ballast). npm registry on this PC is
+  broken locally → every install uses `--registry=https://registry.npmjs.org/`.
+- **Found + fixed a real bug**: token "units" were mixed up (raw 6-decimal amounts vs whole
+  USDC). $500 wallet was treated as 500 *raw units* (≈ nothing), so the real ~$62 rescue was
+  dry-run-BLOCKED and the storm ended FOUNDERED. Fix: everything is raw units now — config
+  `defaultsRisk(maxUsd, decimals)` scales by 10^decimals, monitor/sim scale MAX_REPAY_UNITS,
+  mock `wouldRevert` compares against `500 × 10^decimals`. Typecheck clean.
+- **`npm run storm` verified end-to-end**: drift HF 1.293 → 1.029 (into red) → all 4 offline
+  chaos rows resolve **baseline ✗ / ballast ✓** (MEV honestly = mainnet-only skip) → rescue
+  dry-runs clean, approve+repay land → **status RESCUED, HF back to 1.300** (target). tick 45.
+- `git init -b main`, first commit, **pushed to GitHub** (remote set, branch main tracking).
+
 ### Next up
-- Scaffold files (root + guardian), `git init`, try first push to GitHub.
-- Write guardian core modules.
+- Guardian tests (policy/guard/workflows + a storm integration test asserting RESCUED).
+- Ballast screen: brass inclinometer gauge, status words, storm conditions table, ~700ms
+  rescue swing, ship's log, SSE hook. (The visible demo!)
+- Retry KeeperHub read-only introspection for the live adapter + bounty-PR ideas.

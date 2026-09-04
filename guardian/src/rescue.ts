@@ -73,11 +73,15 @@ export async function attemptRescue(deps: RescueDeps): Promise<RescueOutcome> {
     });
   }
 
-  // 3. Guard clamps.
+  // 3. Guard clamps (and carries the analyst's plain-language rationale through).
   let safe: Proposal;
   try {
     safe = guard(
-      { debtAsset: raw.debtAsset || deps.debtAsset, amountUnits: BigInt(raw.amountUnits || '0') },
+      {
+        debtAsset: raw.debtAsset || deps.debtAsset,
+        amountUnits: BigInt(raw.amountUnits || '0'),
+        rationale: raw.rationale,
+      },
       { allowedAssets: deps.allowedAssets, maxUnits: deps.maxUnits },
     );
   } catch (e) {
