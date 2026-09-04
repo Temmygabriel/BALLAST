@@ -42,13 +42,18 @@ else stays clean. This is what the judges want to see.
 
 - [x] **Scaffold repo** (git, workspaces, root files) — done, pushed
 - [x] **Guardian core** (aave/policy/guard/workflows/keeperhub adapter/composer/baseline/state)
-- [ ] **Live KeeperHub adapter** + re-run read-only discovery against real KeeperHub API
+- [x] **Live KeeperHub adapter** — aligned to the real KeeperHub surface (bare `abiFunction` +
+      `functionArgs`, `simulate`, `idempotency_key`, status polling). Compile-tested + unit-tested.
+      Still no live run (needs KeeperHub creds + funded testnet wallet → documented next step).
 - [x] **Simulator + monitor + SSE server + CLI** (offline chaos scenarios) — storm verified green
-- [ ] **Guardian tests** (should all pass)
-- [ ] **Ballast screen** (gauge UI, storm table, rescue animation, ship's log)
-- [ ] **End-to-end demo + README**
+- [x] **Guardian tests** — 25/25 pass (policy, guard, workflows, rescue, keeperhub idempotency,
+      storm integration: baseline fail rows → RESCUED @ HF 1.300)
+- [x] **Ballast screen** — built, typecheck clean, dev server 200, **15/15 headless render checks
+      pass**. Pushed (commit `cba2796`). Not yet eyeballed in a real browser.
+- [ ] **End-to-end demo + README** (README is still a stub)
 - [ ] **Foundry install attempt** (best-effort; for real chain-fork chaos later)
 - [ ] **GitHub Actions CI** (so tests+build run in the cloud, not your PC)
+- [ ] **Real-browser visual pass** on the Ballast gauge (needle zones, storm, rescue swing)
 
 ## Log
 
@@ -75,8 +80,29 @@ else stays clean. This is what the judges want to see.
   dry-runs clean, approve+repay land → **status RESCUED, HF back to 1.300** (target). tick 45.
 - `git init -b main`, first commit, **pushed to GitHub** (remote set, branch main tracking).
 
+### 2026-09-04 — Guardian tests green + live-adapter alignment + Ballast screen 🎨
+- Wrote 6 test files, **25/25 pass**: policy, guard, workflows, rescue (rationale reaches the
+  UI — test caught it dropping), keeperhub (idempotency key reuse), storm integration.
+- Re-ran KeeperHub introspection; aligned `keeperhub.ts` + `workflows.ts` to the **real** field
+  names (`abiFunction` bare fn name + `functionArgs` array-as-string; workflow nodes
+  `web3/read-contract` etc.). Compile + unit tested (no live creds yet).
+- **Built the whole Ballast screen**: ship-brass SVG inclinometer (danger/amber/safe zone arcs),
+  needle swings via CSS ~760ms (reduced-motion → jump), status plate with big status word
+  (STEADY/LISTING/CAPSIZING/RESCUED/FOUNDERED), HF readout + thresholds line, analyst rationale,
+  audit link, telemetry strip, Storm Mode conditions table (naive fail / ballast pass / skip +
+  mainnet-only flag), Ship's Log (auto-scroll), Dev Deck scenario buttons, offline "BRIDGE DARK"
+  plate, Space Grotesk + JetBrains Mono.
+- Verified: `npm run typecheck` clean; dev server 200 SSR with BRIDGE DARK; **15/15 headless
+  render checks pass** (`ballast/scratch/render-check.tsx`, no browser needed). Both live
+  servers confirmed earlier: guardian SSE on :4300 (idle HF 1.3333) + ballast dev :3000.
+- Ballast typecheck made fresh-clone-safe (`next typegen && tsc`).
+- **Committed + pushed** as `cba2796` (26 files, +2175). Repo now has the full offline-green
+  product + tests + UI.
+
 ### Next up
-- Guardian tests (policy/guard/workflows + a storm integration test asserting RESCUED).
-- Ballast screen: brass inclinometer gauge, status words, storm conditions table, ~700ms
-  rescue swing, ship's log, SSE hook. (The visible demo!)
-- Retry KeeperHub read-only introspection for the live adapter + bounty-PR ideas.
+- **Eyeball it in a real browser**: `npm run dev` (or `npm run demo` for both) → open
+  http://localhost:3000 → hit "Run the full storm" on the Dev Deck and watch the needle drift
+  red, then swing back green to **RESCUED**. (I can't open a browser on this PC; needs your eyes.)
+- Write the README (setup, architecture, honest "live wiring = next step" section).
+- GitHub Actions CI (tests + build in the cloud).
+- Foundry install attempt + real KeeperHub live wiring (post-creds).
