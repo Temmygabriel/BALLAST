@@ -81,9 +81,13 @@ interface LiveOpts {
 
 /**
  * Talks to KeeperHub's MCP server. The MCP SDK is imported lazily so the offline
- * build never loads it. Tool/field names mirror what the plugin exposes today:
- *   execute_contract_call {network, contractAddress, abiFunction, args, simulate?}
- *   get_direct_execution_status {executionId}
+ * build never loads it. Field names below were read from the live plugin surface
+ * (read-only introspection, 2026-09-04):
+ *   execute_contract_call {chain_id, contract_address, function_name,
+ *                          function_args (JSON-array-as-string), simulate?,
+ *                          idempotency_key}
+ *   get_direct_execution_status {execution_id}
+ * The `abi` field is optional — verified contracts are auto-fetched.
  */
 export class LiveKeeperHub implements KeeperHub {
   private readonly opts: LiveOpts;
@@ -119,12 +123,26 @@ export class LiveKeeperHub implements KeeperHub {
     return res?.structuredContent ?? res;
   }
 
+  /** "repay(address,uint256,…)" → the bare function name the tools expect. */
+  private static fname(abiFunction: string): string {
+    const i = abiFunction.indexOf('(');
+    return i >= 0 ? abiFunction.slice(0, i) : abiFunction;
+  }
+
+  /** Map our ContractCall onto the real MCP tool's argument names. */
+  private static txArgs(call: ContractCall): Record<string, unknown> {
+    return {
+      chain_id: call.network,
+      contract_address: call.contractAddress,
+      function_name: LiveKeeperHub.fname(call.abiFunction),
+      function_args: JSON.stringify(call.args ?? []),
+      ...(call.value ? { value: call.value } : {}),
+    };
+  }
+
   async simulate(call: ContractCall): Promise<SimResult> {
     const r: any = await this.call('execute_contract_call', {
-      network: call.network,
-      contractAddress: call.contractAddress,
-      abiFunction: call.abiFunction,
-      args: call.args,
+      ...LiveKeeperHub.txArgs(call),
       simulate: true, // JSON boolean — nothing is broadcast
     });
     return { success: !!r?.success, wouldRevert: !!r?.wouldRevert, error: r?.error };
@@ -132,27 +150,26 @@ export class LiveKeeperHub implements KeeperHub {
 
   async execute(call: ContractCall, idempotencyKey: string): Promise<ExecResult> {
     const r: any = await this.call('execute_contract_call', {
-      network: call.network,
-      contractAddress: call.contractAddress,
-      abiFunction: call.abiFunction,
-      args: call.args,
+      ...LiveKeeperHub.txArgs(call),
       idempotency_key: idempotencyKey,
     });
     return {
-      executionId: r?.executionId ?? r?.id ?? '',
+      executionId: r?.executionId ?? r?.id ?? r?.execution_id ?? '',
       status: r?.status ?? 'running',
-      txHash: r?.txHash,
+      txHash: r?.txHash ?? r?.transactionHash,
+      auditUrl: r?.auditUrl,
     };
   }
 
   async waitForTx(executionId: string): Promise<ExecResult> {
     for (let i = 0, d = 1500; i < 20; i++, d = Math.min(d * 1.6, 15000)) {
-      const r: any = await this.call('get_direct_execution_status', { executionId });
-      if (r?.status === 'completed' || r?.status === 'failed') {
+      const r: any = await this.call('get_direct_execution_status', { execution_id: executionId });
+      const status = r?.status;
+      if (status === 'completed' || status === 'failed') {
         return {
           executionId,
-          status: r.status,
-          txHash: r.transactionHash ?? r.txHash,
+          status,
+          txHash: r?.transactionHash ?? r?.txHash,
           auditUrl: r?.auditUrl,
         };
       }
