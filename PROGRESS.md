@@ -54,6 +54,12 @@ else stays clean. This is what the judges want to see.
 - [ ] **Foundry install attempt** (best-effort; for real chain-fork chaos later)
 - [ ] **GitHub Actions CI** (so tests+build run in the cloud, not your PC)
 - [ ] **Real-browser visual pass** on the Ballast gauge (needle zones, storm, rescue swing)
+- [ ] **🚀 Cloud engine on Vercel** — engine riding inside the app at `/api/guardian`, so the
+      deployed link is LIVE for anyone (no localhost). IN PROGRESS.
+- [ ] **🔐 Security-hardening addendum** (`ballast-security-hardening.md` arrived) — P0/P1 items
+      queued: stable per-episode idempotency key, tick in-flight lock, pre-execution
+      revalidation, post-execution HF verify, two-block confirmation, MEV claim softening,
+      LLM output schema validation, README claim fixes, extra chaos rows.
 
 ## Log
 
@@ -99,10 +105,27 @@ else stays clean. This is what the judges want to see.
 - **Committed + pushed** as `cba2796` (26 files, +2175). Repo now has the full offline-green
   product + tests + UI.
 
+### 2026-09-04 — Deploy day: Vercel live + security review arrives 🚀🔐
+- You deployed Ballast to Vercel on your own: **https://ballast-green.vercel.app** (auto-deploys
+  from GitHub `main`). It showed "BRIDGE DARK / engine not answering" — CORRECT behaviour:
+  the screen is a window and the engine only existed on your PC, so the internet had nothing
+  to connect to. That's the app being honest, not glitching.
+- **Decision: put the engine INSIDE the Vercel app** (one repo → one deploy, no second host,
+  no localhost). Work in progress:
+  - Guardian exposed as an importable package (`guardian/src/index.ts` + `main`), `viem` made
+    lazy so the cloud demo stays light; Next `transpilePackages: ['guardian']`.
+  - New API route `ballast/app/api/guardian/[...path]/route.ts` runs the SIM engine server-side:
+    `GET /state`, `GET /events` (SSE), `POST /scenario` (awaited to completion, returns final
+    state so the rescue lands even across serverless instances).
+  - Hook auto-detects: deployed → same-origin `/api/guardian` (polling, serverless-friendly);
+    on your PC → standalone guardian :4300 (SSE). DevDeck adopts the POST's final state.
+- New spec file **`ballast-security-hardening.md`** (read, mapped to code, queued as task #13).
+  Also noted: `ballast-security-gameability-review.md` exists as the fuller review it came from.
+- npm reinstall ran (new `guardian` workspace dep) — done, exit 0.
+
 ### Next up
-- **Eyeball it in a real browser**: `npm run dev` (or `npm run demo` for both) → open
-  http://localhost:3000 → hit "Run the full storm" on the Dev Deck and watch the needle drift
-  red, then swing back green to **RESCUED**. (I can't open a browser on this PC; needs your eyes.)
-- Write the README (setup, architecture, honest "live wiring = next step" section).
-- GitHub Actions CI (tests + build in the cloud).
-- Foundry install attempt + real KeeperHub live wiring (post-creds).
+- **Finish + verify the Vercel cloud engine** (typecheck/build → local smoke of `/api/guardian`
+  → push → Vercel auto-redeploys → I fetch the public URL to confirm it's live). Then YOU press
+  "Run the full storm" on the deployed page.
+- **Apply security hardening** (task #13, P0 first) with all 25 tests still green.
+- Write the README, GitHub Actions CI, Foundry attempt, real live-wiring (post-creds).

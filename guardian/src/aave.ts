@@ -7,8 +7,14 @@
  *   HF < 1   → liquidatable (anyone can now seize your collateral at a discount)
  * A crash lowers the collateral's value, so HF drops. The guardian acts before it hits ~1.
  */
-import { createPublicClient, http, type PublicClient } from 'viem';
+import type { PublicClient } from 'viem';
 import type { Position, PositionSource } from './types';
+
+// viem (the RPC client) is imported lazily inside liveAaveSource so the offline
+// sim path and the cloud demo never pull the whole library into their bundle.
+type Viem = typeof import('viem');
+let viemPromise: Promise<Viem> | null = null;
+const loadViem = () => (viemPromise ??= import('viem'));
 
 export const poolAbi = [
   {
@@ -54,9 +60,13 @@ export function liveAaveSource(opts: {
   assetName: string;
   label?: string;
 }): PositionSource {
-  const client: PublicClient = createPublicClient({ transport: http(opts.rpcUrl) });
+  let client: PublicClient | null = null;
   return {
     async getPosition(): Promise<Position> {
+      if (!client) {
+        const { createPublicClient, http } = await loadViem();
+        client = createPublicClient({ transport: http(opts.rpcUrl) });
+      }
       const r = await client.readContract({
         address: opts.pool as `0x${string}`,
         abi: poolAbi,

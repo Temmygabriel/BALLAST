@@ -3,6 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
   "description": "Ballast engine: watches an Aave position's health factor and rescues it through KeeperHub",
   "scripts": {
     "dev": "tsx watch src/cli.ts sim",

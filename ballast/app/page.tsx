@@ -18,7 +18,7 @@ import ShipLog from '../components/ShipLog';
 import DevDeck from '../components/DevDeck';
 import EngineOffline from '../components/EngineOffline';
 
-function Bridge({ state }: { state: InstrumentState }) {
+function Bridge({ state, onScenario }: { state: InstrumentState; onScenario: (s: InstrumentState) => void }) {
   return (
     <>
       <div className="instrument-column">
@@ -30,7 +30,7 @@ function Bridge({ state }: { state: InstrumentState }) {
       </div>
 
       <div className="side-column">
-        {state.engineMode === 'sim' ? <DevDeck /> : null}
+        {state.engineMode === 'sim' ? <DevDeck onScenario={onScenario} /> : null}
         <StormConditions state={state} />
         <ShipLog entries={state.log} />
       </div>
@@ -39,7 +39,7 @@ function Bridge({ state }: { state: InstrumentState }) {
 }
 
 export default function Page() {
-  const { state, connected, retry } = useGuardianState();
+  const { state, connected, retry, ingest } = useGuardianState();
   const hasEngine = Boolean(state);
 
   return (
@@ -51,7 +51,7 @@ export default function Page() {
       />
       <main className="console">
         {hasEngine ? (
-          <Bridge state={state as InstrumentState} />
+          <Bridge state={state as InstrumentState} onScenario={ingest} />
         ) : (
           <div className="offline-wrap">
             <EngineOffline retry={retry} />

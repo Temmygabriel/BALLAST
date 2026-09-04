@@ -1,6 +1,7 @@
 'use client';
 
 import { guardianBase } from '../lib/useGuardianState';
+import type { InstrumentState } from '../lib/types';
 
 const SCENARIOS: Array<{ id: string; label: string; mainnetOnly?: boolean }> = [
   { id: 'storm', label: 'Full storm' },
@@ -12,16 +13,22 @@ const SCENARIOS: Array<{ id: string; label: string; mainnetOnly?: boolean }> = [
 ];
 
 /** Demo controls — how a storm gets raised from the screen (sim mode only). */
-export default function DevDeck() {
+export default function DevDeck({ onScenario }: { onScenario?: (s: InstrumentState) => void }) {
   const fire = async (name: string) => {
     const base = guardianBase();
     if (!base) return;
     try {
-      await fetch(`${base}/scenario`, {
+      const r = await fetch(`${base}/scenario`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name }),
       });
+      // The engine (cloud) replies with the final state once the scenario ran;
+      // adopt it so the screen lands on RESCUED even if a poll missed a beat.
+      if (r.ok && onScenario) {
+        const b = (await r.json()) as { state?: InstrumentState | null };
+        if (b?.state) onScenario(b.state);
+      }
     } catch {
       /* engine gone mid-click — fine, it reconnects */
     }
