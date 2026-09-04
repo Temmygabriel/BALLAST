@@ -1,0 +1,173 @@
+/**
+ * ⚓ THE KEEPERHUB ADAPTER BOUNDARY — the only file in the repo that knows KeeperHub.
+ *
+ * Everything else talks to `KeeperHub` (a small interface). This file supplies it
+ * two ways:
+ *   1. MockKeeperHub  — offline. Used for sim/demo/tests. No network, no keys.
+ *   2. LiveKeeperHub  — the real thing. Talks to KeeperHub's MCP server over HTTP,
+ *      calling the same tools the Claude Code plugin exposes
+ *      (`execute_contract_call`, `get_direct_execution_status`).
+ *
+ * Grep rule to keep forever: nothing outside this file may import a KeeperHub SDK.
+ */
+import type { ContractCall, ExecResult, KeeperHub, SimResult } from './types';
+
+const randHex = (len = 16) =>
+  '0x' + Array.from({ length: len }, () => Math.floor(Math.random() * 16).toString(16)).join('');
+
+/* ───────────────────────── 1. OFFLINE MOCK ───────────────────────── */
+
+export interface MockOpts {
+  /**
+   * Optional "would this call revert on the real chain?" oracle, so a scenario can
+   * make the dry-run catch a bad repay. Default: nothing reverts.
+   */
+  wouldRevert?: (call: ContractCall) => boolean;
+  /** Optional log so the engine can record what the mock did. */
+  onStep?: (msg: string) => void;
+}
+
+export class MockKeeperHub implements KeeperHub {
+  private readonly opts: MockOpts;
+  /** Idempotency keys we've already seen → their result. Re-sends return it. */
+  private readonly seen = new Map<string, ExecResult>();
+
+  constructor(opts: MockOpts = {}) {
+    this.opts = opts;
+  }
+
+  async simulate(call: ContractCall): Promise<SimResult> {
+    const wouldRevert = this.opts.wouldRevert?.(call) ?? false;
+    this.opts.onStep?.(`dry-run ${call.abiFunction} → ${wouldRevert ? 'WOULD REVERT' : 'ok'}`);
+    return wouldRevert
+      ? { success: false, wouldRevert: true, error: 'simulate: call would revert' }
+      : { success: true, wouldRevert: false };
+  }
+
+  async execute(call: ContractCall, idempotencyKey: string): Promise<ExecResult> {
+    const prior = this.seen.get(idempotencyKey);
+    if (prior) {
+      this.opts.onStep?.(`idempotent re-send of ${call.abiFunction} → reused ${prior.txHash}`);
+      return prior;
+    }
+    const executionId = `mock_exec_${randHex(10).slice(2)}`;
+    const result: ExecResult = {
+      executionId,
+      status: 'completed',
+      txHash: randHex(32),
+      auditUrl: `https://mock.keeperhub.local/audit/${executionId}`,
+    };
+    this.seen.set(idempotencyKey, result);
+    this.opts.onStep?.(`executed ${call.abiFunction} → ${result.txHash}`);
+    return result;
+  }
+
+  async waitForTx(executionId: string): Promise<ExecResult> {
+    return {
+      executionId,
+      status: 'completed',
+      txHash: randHex(32),
+      auditUrl: `https://mock.keeperhub.local/audit/${executionId}`,
+    };
+  }
+}
+
+/* ───────────────────────── 2. LIVE (REAL KEEPERHUB) ───────────────────────── */
+
+interface LiveOpts {
+  mcpUrl: string;
+  apiKey: string;
+}
+
+/**
+ * Talks to KeeperHub's MCP server. The MCP SDK is imported lazily so the offline
+ * build never loads it. Tool/field names mirror what the plugin exposes today:
+ *   execute_contract_call {network, contractAddress, abiFunction, args, simulate?}
+ *   get_direct_execution_status {executionId}
+ */
+export class LiveKeeperHub implements KeeperHub {
+  private readonly opts: LiveOpts;
+  private client: Promise<unknown> | null = null;
+
+  constructor(opts: LiveOpts) {
+    this.opts = opts;
+  }
+
+  /** Connect once, lazily. Returns the raw MCP client object (typed as unknown on purpose). */
+  private mcp(): Promise<any> {
+    if (this.client) return this.client;
+    this.client = (async () => {
+      // Lazy import: only present when the live dependency set is installed.
+      const { Client } = await import('@modelcontextprotocol/sdk/client/index.js');
+      const { StreamableHTTPClientTransport } = await import(
+        '@modelcontextprotocol/sdk/client/streamableHttp.js'
+      );
+      const transport = new StreamableHTTPClientTransport(new URL(this.opts.mcpUrl), {
+        requestInit: { headers: { Authorization: `Bearer ${this.opts.apiKey}` } },
+      });
+      const client = new Client({ name: 'ballast-guardian', version: '0.1.0' });
+      await client.connect(transport);
+      return client;
+    })();
+    return this.client;
+  }
+
+  private async call(name: string, args: unknown): Promise<any> {
+    const mcp: any = await this.mcp();
+    const res = await mcp.callTool({ name, arguments: args });
+    // MCP tools may return {content:[...]} and/or structuredContent.
+    return res?.structuredContent ?? res;
+  }
+
+  async simulate(call: ContractCall): Promise<SimResult> {
+    const r: any = await this.call('execute_contract_call', {
+      network: call.network,
+      contractAddress: call.contractAddress,
+      abiFunction: call.abiFunction,
+      args: call.args,
+      simulate: true, // JSON boolean — nothing is broadcast
+    });
+    return { success: !!r?.success, wouldRevert: !!r?.wouldRevert, error: r?.error };
+  }
+
+  async execute(call: ContractCall, idempotencyKey: string): Promise<ExecResult> {
+    const r: any = await this.call('execute_contract_call', {
+      network: call.network,
+      contractAddress: call.contractAddress,
+      abiFunction: call.abiFunction,
+      args: call.args,
+      idempotency_key: idempotencyKey,
+    });
+    return {
+      executionId: r?.executionId ?? r?.id ?? '',
+      status: r?.status ?? 'running',
+      txHash: r?.txHash,
+    };
+  }
+
+  async waitForTx(executionId: string): Promise<ExecResult> {
+    for (let i = 0, d = 1500; i < 20; i++, d = Math.min(d * 1.6, 15000)) {
+      const r: any = await this.call('get_direct_execution_status', { executionId });
+      if (r?.status === 'completed' || r?.status === 'failed') {
+        return {
+          executionId,
+          status: r.status,
+          txHash: r.transactionHash ?? r.txHash,
+          auditUrl: r?.auditUrl,
+        };
+      }
+      await new Promise((res) => setTimeout(res, d));
+    }
+    return { executionId, status: 'timeout' };
+  }
+}
+
+/* ───────────────────────── 3. PICK ONE ───────────────────────── */
+
+/** Live only when real creds exist — otherwise the offline mock. */
+export function pickKeeper(env?: { keeperhubMcpUrl?: string; keeperhubApiKey?: string }): KeeperHub {
+  if (env?.keeperhubMcpUrl && env?.keeperhubApiKey) {
+    return new LiveKeeperHub({ mcpUrl: env.keeperhubMcpUrl, apiKey: env.keeperhubApiKey });
+  }
+  return new MockKeeperHub();
+}

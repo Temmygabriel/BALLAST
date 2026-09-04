@@ -1,0 +1,21 @@
+{
+  "name": "ballast",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Ballast — a liquidation-protection guardian (guardian/) with a ship's-inclinometer UI (ballast/), built on KeeperHub for the Agent Economy hackathon",
+  "workspaces": [
+    "guardian",
+    "ballast"
+  ],
+  "scripts": {
+    "dev": "concurrently -n guardian,ballast -c blue,magenta \"npm run dev --workspace guardian\" \"npm run dev --workspace ballast\"",
+    "sim": "npm run sim --workspace guardian",
+    "live": "npm run live --workspace guardian",
+    "test": "npm run test --workspace guardian",
+    "typecheck": "npm run typecheck --workspace guardian && npm run typecheck --workspace ballast",
+    "build": "npm run typecheck"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.5"
+  }
+}

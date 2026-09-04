@@ -1,0 +1,26 @@
+{
+  "name": "guardian",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Ballast engine: watches an Aave position's health factor and rescues it through KeeperHub",
+  "scripts": {
+    "dev": "tsx watch src/cli.ts sim",
+    "sim": "tsx src/cli.ts sim",
+    "live": "tsx src/cli.ts live",
+    "storm": "tsx src/cli.ts storm",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "openai": "^7.10.0",
+    "viem": "^2.56.3"
+  },
+  "devDependencies": {
+    "@types/node": "^26.4.1",
+    "tsx": "^4.23.13",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.0"
+  }
+}
