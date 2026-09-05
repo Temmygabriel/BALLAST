@@ -50,7 +50,8 @@ else stays clean. This is what the judges want to see.
       storm integration: baseline fail rows → RESCUED @ HF 1.300)
 - [x] **Ballast screen** — built, typecheck clean, dev server 200, **15/15 headless render checks
       pass**. Pushed (commit `cba2796`). Not yet eyeballed in a real browser.
-- [ ] **End-to-end demo + README** (README is still a stub)
+- [x] **End-to-end demo + README** — README rewritten with the REAL audit trail + hardening
+      rules; live-rescue demo proven on-chain; storm/blip scenarios verified via tests.
 - [ ] **Foundry install attempt** (best-effort; for real chain-fork chaos later)
 - [ ] **GitHub Actions CI** (so tests+build run in the cloud, not your PC)
 - [ ] **Real-browser visual pass** on the Ballast gauge (needle zones, storm, rescue swing)
@@ -58,14 +59,13 @@ else stays clean. This is what the judges want to see.
       LIVE: a full storm POSTed to the public URL landed **RESCUED @ HF 1.30**, all chaos rows
       baseline fail / ballast pass. (Build had failed: `vercel.json` `rootDirectory` was rejected
       by Vercel's schema — deleted the file; Root Directory was already set in the dashboard.)
-- [ ] **🔐 Security-hardening addendum** (`ballast-security-hardening.md`) — FIRST TRANCHE
-      CODED LOCALLY (not yet committed/pushed): `src/trigger.ts` TriggerGate (two-block
-      confirmation + explicit emergency bypass, stable episode id), stable per-episode
-      idempotency keys + TOCTOU re-validation + post-execution HF verify + private-routing
-      fail-closed in `rescue.ts`, LLM output schema validation in `composer.ts`, sim AND live
-      monitor wired through the gate (`simulator.ts`, `monitor.ts`, `aave.ts` block read).
-      Typecheck clean. **Deferred by the user until live mode works** — remaining: extra
-      hardening tests, `price-blip` scenario dispatch (cli/route/DevDeck), README claim fixes.
+- [x] **🔐 Security-hardening addendum** (`ballast-security-hardening.md`) — DONE. First
+      tranche (TriggerGate two-block confirmation + emergency bypass, stable per-episode
+      idempotency keys, TOCTOU re-validation, post-exec HF verify, private-routing fail-closed,
+      hostile-LLM schema validation, sim + live wired through the gate) + second tranche:
+      21 new tests (trigger/composer/rescue/storm) → **46/46 green**, `price-blip` dispatched
+      through cli/route/DevDeck, README claims fixed to the real audit trail, `.env.example`
+      updated. Committed `cde8995` + pushed (5b28884..cde8995).
 - [x] **🔌 LIVE RESCUE LANDED on real Sepolia via KeeperHub** 🎉 (2026-09-05) — real Aave v3
       position built near-liquidation (HF **1.0417**), `npm run live` confirmed it across two
       blocks and repaid ~$6.93 USDC through KeeperHub to bring the position back to the 1.30
@@ -77,6 +77,11 @@ else stays clean. This is what the judges want to see.
       (MCP returns `content[0].text` JSON, no `structuredContent`; real execute returns
       `executionId/status/transactionHash/transactionLink`, `status:"completed"` immediately,
       `sponsored:true`).
+- [x] **🌥️ Cloud-LIVE arm** — the DEPLOYED Vercel URL reads the real position + gated rescue
+      (guardian/src/cloud.ts LiveService + liveArmed/rescueArmed, /state//events//rescue in the
+      route, LivePanel component, sim stays the keyless default). 51/51 guardian tests, both
+      typechecks clean, render-check 15/15. Docs: .env.example block, README section,
+      FILMING-GUIDE.md. Not yet committed → Vercel env vars are the operator's next step.
 
 ## Log
 
@@ -195,16 +200,23 @@ else stays clean. This is what the judges want to see.
   separate "cloud-live" step; serverless isn't a great home for an always-on watcher.
 
 ### Next up
-1. **Finish security hardening** (task #13): add the new tests (trigger gate, blip no-rescue,
-   TOCTOU abort, post-exec flag, hostile-LLM fallback, private-routing fail-closed,
-   idempotent retry), wire `price-blip` into cli/route/DevDeck, run full tests + typecheck,
-   fix README claims, then commit+push. (README/`PROGRESS.md` live-rescue claims must reflect
-   the landed tx.)
-2. Write README (#10) with the REAL audit trail above, GitHub Actions CI (#11), Foundry
-   attempt (#8), real-browser pass (#9).
-3. Optional flourish: re-run the demo in fresh form — the position is currently healthy at
-   HF 1.30 after the rescue, so build-position (now a no-op, already supplied/borrowed) needs a
-   fresh borrow to create a new near-liquidation episode if we want to re-film the rescue.
+1. **GitHub Actions CI** (#11) — run `npm test` + both typechecks in the cloud so green isn't
+   PC-dependent. Low cost, high judge value.
+2. **Foundry attempt** (#8, best-effort; needs MSVC on Windows — defer if it fights back).
+3. **Real-browser visual pass** (#9) — the user's step: open the deployed Vercel page + storm,
+   eyeball the needle swing and rescue on a real screen.
+4. Optional flourish: re-film a fresh rescue — the position is healthy at HF 1.30 now, so
+   `build-position` needs a new borrow to create a new near-liquidation episode.
+
+### 2026-09-05 — Hardening tranche done: 46 tests green, committed + pushed (cde8995) 🔒
+- 21 new tests (TriggerGate 7, hostile-LLM schema 8, rescue TOCTOU/post-exec/fail-closed +5,
+  storm blip-no-rescue +1) → **46/46 pass**. Both packages typecheck clean.
+- `price-blip` (single-block scare, NO rescue) dispatched through cli.ts / API route /
+  DevDeck — proving the confirmation window holds and a blip never fires a rescue.
+- README rewritten: real Sepolia audit trail up top (approve + repay txs, sponsored:true),
+  honest hardening claims (no universal MEV guarantee; private routing verified never assumed),
+  run instructions, chaos table. `.env.example` warns DEBT_ASSET must be Aave-listed USDC.
+- Committed `cde8995` + pushed to GitHub main (`5b28884..cde8995`) → Vercel auto-deploys.
 
 ### 2026-09-05 — 🎉 LIVE RESCUE LANDED: real USDC moved through KeeperHub
 - **Built a real, near-liquidation Aave v3 position** (`guardian/scripts/build-position.mjs`)
@@ -241,3 +253,34 @@ else stays clean. This is what the judges want to see.
   `Get-NetTCPConnection -LocalPort 4300`) before restarting.
 - Guardian process still watching (position now healthy → STEADY); repo work uncommitted
   (env.ts/keeperhub.ts fixes + these scripts) — commit after the hardening tranche.
+
+### 2026-09-05 — Cloud-live arm built: the deployed URL can go LIVE, not just sim ⛵
+- **User redirected the goal**: the plan was the DEPLOYED Vercel app being live with env vars —
+  real reads + rescues from the cloud — not local-only. Owned the gap; built it.
+- **`guardian/src/cloud.ts`** (new): `LiveService` (throttled chain reads at `POLL_MS`, serialized
+  `sync`, `getState`, `rescueNow`), `liveArmed()` (chain vars present → live read), `rescueArmed()`
+  (chain + KeeperHub creds + `BALLAST_LIVE_KEY` → money path), `liveCfgFromEnv()`, `publicOutcome()`
+  (bigint-safe wire shape). `rescueNow()` reuses the guardian's OWN money path (`attemptRescue`) —
+  refuses a healthy position, dry-runs every call, re-reads right before broadcast, verifies the
+  HF moved afterwards. Honesty doc-comment: human-in-the-loop, no hidden auto-trigger. Tests in
+  `guardian/test/cloud.test.ts` (arming matrix + bigint-free JSON) → **51/51 pass**.
+- **Route** (`ballast/app/api/guardian/[...path]/route.ts`): engine is SIM (keyless default) OR
+  LIVE (env-armed). `/state` live read wrapped → clean 503 on RPC failure; `/health` →
+  `{ok, engine, armed}`; `/events` SSE works for both; `POST /rescue` → 409 not-live / 503
+  disarmed / 401 bad `x-ballast-key` / else runs the rescue; `POST /scenario` refused 409 in
+  live (a real position is not a toy).
+- **`LivePanel.tsx`** (new component): shows on the page when live — operator-key box (masked,
+  never stored), RESCUE NOW button, disarmed state, and honestly reads the refused/healthy reply.
+  Sim keeps DevDeck + StormConditions; **UI still never computes anything**.
+- Verified: both packages typecheck clean, render-check 15/15 (needs
+  `TSX_TSCONFIG_PATH=ballast/scratch/tsconfig.json` — app tsconfig is jsx:preserve).
+- **Docs**: `.env.example` "Cloud-live on Vercel" block; README "Cloud live" section (env table,
+  sim-stays-default, curl for /state and gated /rescue, honest on-demand-not-always-on caveat);
+  **FILMING-GUIDE.md** — Bandicam demo script with verbatim captions (Beat 1 live-read proof,
+  Beat 2 honest refusal, Beat 3 real rescue incl. re-borrow step since the position is healthy
+  at HF 1.30), gotchas, never-film secrets.
+- **NOT always-on**: serverless can't watch every 12 s. The cloud `/rescue` is a button press;
+  the automatic two-block guardian stays `npm run live`. Said plainly, no overclaiming.
+- Uncommitted on disk → commit + push next (auto-deploys); then the operator pastes Vercel env
+  vars (chain vars alone arm the read-only proof; + KeeperHub creds + BALLAST_LIVE_KEY arm the
+  money path).

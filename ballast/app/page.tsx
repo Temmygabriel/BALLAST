@@ -16,9 +16,11 @@ import Telemetry from '../components/Telemetry';
 import StormConditions from '../components/StormConditions';
 import ShipLog from '../components/ShipLog';
 import DevDeck from '../components/DevDeck';
+import LivePanel from '../components/LivePanel';
 import EngineOffline from '../components/EngineOffline';
 
 function Bridge({ state, onScenario }: { state: InstrumentState; onScenario: (s: InstrumentState) => void }) {
+  const isLive = state.engineMode === 'live';
   return (
     <>
       <div className="instrument-column">
@@ -30,8 +32,8 @@ function Bridge({ state, onScenario }: { state: InstrumentState; onScenario: (s:
       </div>
 
       <div className="side-column">
-        {state.engineMode === 'sim' ? <DevDeck onScenario={onScenario} /> : null}
-        <StormConditions state={state} />
+        {isLive ? <LivePanel onState={onScenario} /> : <DevDeck onScenario={onScenario} />}
+        {isLive ? null : <StormConditions state={state} />}
         <ShipLog entries={state.log} />
       </div>
     </>

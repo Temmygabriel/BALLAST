@@ -1,7 +1,8 @@
 /**
  * Headless render check — server-renders every client component with a fake
  * instrument state and asserts the expected markup appears. No browser needed.
- * Run: node node_modules/tsx/dist/cli.mjs ballast/scratch/render-check.tsx
+ * Run (needs the scratch tsconfig so JSX uses the automatic runtime):
+ *   TSX_TSCONFIG_PATH=ballast/scratch/tsconfig.json node node_modules/tsx/dist/cli.mjs ballast/scratch/render-check.tsx
  */
 import { renderToStaticMarkup } from 'react-dom/server';
 import { createElement as h } from 'react';

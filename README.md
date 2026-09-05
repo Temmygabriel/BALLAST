@@ -68,6 +68,23 @@ Cloud demo (no localhost): the same engine runs inside the deployed Next app at 
 
 Live helper scripts live in `guardian/scripts/` (build position, check balances, verify creds). Testnet only — mainnet is a config change away but is not what this demo moves.
 
+### Cloud live — the deployed page reads a real position, with a gated rescue
+
+The same app you deploy to Vercel can stop being a simulation. Set these **Vercel dashboard → your project → Settings → Environment Variables** and redeploy (a git push):
+
+| variable | what it does |
+|---|---|
+| `RPC_URL` · `CHAIN_ID` · `AAVE_POOL` · `DEBT_ASSET` · `PROTECTED_WALLET` | arms the LIVE engine — `/api/guardian/state` returns your real position's health factor and the gauge's needle becomes that number |
+| `KEEPERHUB_MCP_URL` · `KEEPERHUB_API_KEY` | lets a rescue reach KeeperHub |
+| `BALLAST_LIVE_KEY` | operator key that gates `POST /api/guardian/rescue` (sent as the `x-ballast-key` header) |
+
+Same names as `guardian/.env.example`. Vercel env vars are encrypted — they never live in the repo.
+
+- **Sim stays the default.** With no env vars, the deployed URL is the keyless storm demo, unchanged.
+- Read the real position from anywhere: `curl https://<your-app>/api/guardian/state`
+- Gated rescue: `curl -X POST https://<your-app>/api/guardian/rescue -H 'x-ballast-key: <your key>'`
+- **Honesty:** this is **on-demand**, not an always-on watcher. Serverless can't watch every 12 seconds — a real *automatic* guardian needs two-block confirmation over a continuously running process (that's `npm run live` on your PC). The cloud `/rescue` is a human pressing a button; it still refuses a healthy position, dry-runs every call, re-reads the chain right before broadcasting, and verifies the health factor moved afterwards. No secrets are ever in the client — the key only travels in the request header.
+
 ---
 
 ## 🧪 Chaos conditions table (what the storm actually proves)
