@@ -89,15 +89,19 @@ async function write(tag, args) {
 }
 const bal = async (tok, who) => Number(await publicClient.readContract({ address: tok, abi: erc20, functionName: 'balanceOf', args: [who] }));
 const accountData = async () => await publicClient.readContract({ address: POOL, abi: pool, functionName: 'getUserAccountData', args: [ME] });
+// getUserAccountData returns [collateralBase, debtBase, borrowableBase, liqThresholdBps, ltvBps, healthFactor(1e18)].
+// Health factor is authoritative — read it from the contract, never recompute it by hand.
+const hfOf = (d) => Number(d[5]) / 1e18;
 
 console.log('⚓ Borrowing more listed-USDC to push the position to HF ≈ ' + targetHf + '…');
 console.log('   wallet  ' + ME);
 console.log('   pool    ' + POOL + '\n');
 
-let [C, D, avail, lt] = await accountData();
-let hf = Number((C * lt) / (D === 0n ? 1n : D)) / 1e18;
-if (D === 0n || hf > 100) {
-  console.log('✗ No debt on this position yet — this script re-borrows an EXISTING loan.');
+let d = await accountData();
+let [C, D, avail, lt] = [d[0], d[1], d[2], d[3]];
+let hf = hfOf(d);
+if (D === 0n || hf > 10) {
+  console.log('✗ No meaningful debt on this position yet — this script re-borrows an EXISTING loan.');
   console.log('  Use build-position.mjs first (it supplies collateral AND borrows near the LTV cap).');
   process.exit(1);
 }
@@ -109,14 +113,15 @@ console.log('   starting: collateral ' + usd(C) + ' · debt ' + usd(D) + ' · HF
 
 // Borrow in estimate + corrective steps. Each step reads fresh state and only
 // fires while HF is still above target → it approaches the line, never overshoots.
+// Debt needed for a given HF: HF = C·lt / (D·1e4) → D_target = C·lt / (targetHf·1e4).
+// base(1e8) → USDC raw(1e6) is a ÷100. Never take more than 95% of what's left.
 for (let i = 0; i < 4; i++) {
-  [C, D, avail, lt] = await accountData();
-  hf = Number((C * lt) / (D === 0n ? 1n : D)) / 1e18;
+  d = await accountData();
+  [C, D, avail, lt] = [d[0], d[1], d[2], d[3]];
+  hf = hfOf(d);
   if (hf <= targetHf) break;
-  // HF = (C·lt) / D (C, D in base 1e8; lt in bps). To land at targetHf we need
-  // D_target = C·lt / targetHf, so the extra debt is D_target − D. Cap at 95% of
-  // what Aave still lets us borrow. base(1e8) → USDC raw(1e6) is a ÷100.
-  const neededBase = (Number(C) * Number(lt)) / targetHf - Number(D);
+  const dTargetBase = (Number(C) * Number(lt)) / (targetHf * 1e4);
+  const neededBase = dTargetBase - Number(D);
   const capBase = Number(avail) * 0.95; // never take more than 95% of what's left to borrow
   const takeBase = Math.min(Math.max(neededBase, 0), Math.max(capBase, 0));
   const rawUnits = BigInt(Math.floor(takeBase / 100));
@@ -126,8 +131,9 @@ for (let i = 0; i < 4; i++) {
 }
 
 // Final read.
-[C, D, avail, lt] = await accountData();
-hf = Number((C * lt) / D) / 1e18;
+d = await accountData();
+[C, D, avail, lt] = [d[0], d[1], d[2], d[3]];
+hf = hfOf(d);
 console.log('\n--- position now ---');
 console.log('   collateral ' + usd(C) + ' · debt ' + usd(D) + ' · HF ' + hf.toFixed(4));
 if (hf < 1.01) {
@@ -139,8 +145,8 @@ if (hf < 1.01) {
 }
 
 // Top up the execution wallet so the follow-up rescue (back to HF 1.30) can land:
-// repay base = D − C·lt/1.30   → USDC raw = /100;   +25% margin for interest/time.
-const targetDebtBase = Number(C) * Number(lt) / RESCUE_TARGET_HF;
+// repay base = D − C·lt/(1.30·1e4)   → USDC raw = /100;   +25% margin for interest/time.
+const targetDebtBase = (Number(C) * Number(lt)) / (RESCUE_TARGET_HF * 1e4);
 const repayRaw = BigInt(Math.max(0, Math.floor((Number(D) - targetDebtBase) / 100)));
 const fundRaw = (repayRaw * 125n) / 100n;
 const execUsdc = await bal(USDC, EXEC);
