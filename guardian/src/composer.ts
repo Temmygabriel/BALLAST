@@ -24,7 +24,51 @@ export interface RiskContext {
 
 export interface Analyst {
   readonly kind: 'deepseek' | 'deterministic';
-  propose(ctx: RiskContext): Promise<{ rationale: string; amountUnits: string; debtAsset: string }>;
+  propose(ctx: RiskContext): Promise<AnalystReply>;
+}
+
+/** The ONLY shape an analyst may return. `rationale` is display-only — it is never
+ *  parsed or used to decide what moves money (the guard decides that). */
+export interface AnalystReply {
+  rationale: string;
+  amountUnits: string;
+  debtAsset: string;
+}
+
+/**
+ * The LLM's reply is treated as HOSTILE (hardening §P1-8), not just "structured":
+ *  - reject anything with unexpected top-level fields,
+ *  - reject wrong types / non-integer amounts / amounts above the policy suggestion,
+ *  - the rationale is a bounded display string and carries no decision power.
+ * Throws on any violation; callers fall back to the deterministic analyst.
+ */
+const ANALYST_ALLOWED_FIELDS = ['rationale', 'amountUnits', 'debtAsset'] as const;
+
+export function validateAnalystReply(raw: unknown, ctx: RiskContext): AnalystReply {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
+    throw new Error('analyst reply is not an object');
+  }
+  const o = raw as Record<string, unknown>;
+  for (const key of Object.keys(o)) {
+    if (!(ANALYST_ALLOWED_FIELDS as readonly string[]).includes(key)) {
+      throw new Error(`analyst reply has unexpected field "${key}"`);
+    }
+  }
+  const { rationale, amountUnits, debtAsset } = o;
+  if (typeof rationale !== 'string' || rationale.trim().length === 0) {
+    throw new Error('analyst reply is missing a rationale');
+  }
+  if (rationale.length > 2000) throw new Error('analyst rationale is too long');
+  if (typeof amountUnits !== 'string' || !/^\d+$/.test(amountUnits)) {
+    throw new Error('analyst amountUnits must be a non-negative integer string');
+  }
+  if (BigInt(amountUnits) > BigInt(ctx.suggestedUnits)) {
+    throw new Error('analyst proposed amount exceeds the policy suggestion');
+  }
+  if (typeof debtAsset !== 'string' || !debtAsset.toLowerCase().startsWith('0x')) {
+    throw new Error('analyst debtAsset must be an address');
+  }
+  return { rationale, amountUnits, debtAsset };
 }
 
 /** Offline analyst: do the exact arithmetic, explain it in plain words. */
@@ -35,18 +79,25 @@ export function deterministicAnalyst(): Analyst {
       const units = BigInt(ctx.suggestedUnits);
       const usd = Number(units) / 10 ** 0; // token units ≈ dollars for a stablecoin
       const amountUnits = units < 0n ? 0n : units;
-      return {
-        amountUnits: amountUnits.toString(),
-        debtAsset: ctx.debtAsset,
-        rationale:
-          `Health factor ${ctx.healthFactor.toFixed(3)} is below the action threshold. ` +
-          `Repaying ~$${usd.toFixed(2)} of ${ctx.debtAssetName} restores it to a safe level.`,
-      };
+      return validateAnalystReply(
+        {
+          amountUnits: amountUnits.toString(),
+          debtAsset: ctx.debtAsset,
+          rationale:
+            `Health factor ${ctx.healthFactor.toFixed(3)} is below the action threshold. ` +
+            `Repaying ~$${usd.toFixed(2)} of ${ctx.debtAssetName} restores it to a safe level.`,
+        },
+        ctx,
+      );
     },
   };
 }
 
-/** DeepSeek analyst — only loads the OpenAI SDK when actually used (keeps offline runs light). */
+/**
+ * DeepSeek analyst — only loads the OpenAI SDK when actually used (keeps offline runs light).
+ * The user message is built ONLY from our own structured numeric fields (hardening §P1-7):
+ * the model never receives raw external text, alerts, or arbitrary RPC payloads.
+ */
 export function deepseekAnalyst(opts: {
   apiKey: string;
   baseUrl: string;
@@ -70,15 +121,13 @@ export function deepseekAnalyst(opts: {
               '{"rationale": string, "amountUnits": string, "debtAsset": string}. You PROPOSE a repay; ' +
               'you never execute. Do not exceed the suggestedUnits.',
           },
+          // ctx carries ONLY clean numeric/structured fields we control — no external text.
           { role: 'user', content: JSON.stringify(ctx) },
         ],
       });
-      const parsed = JSON.parse(r.choices[0]?.message?.content ?? '{}') as {
-        rationale: string;
-        amountUnits: string;
-        debtAsset: string;
-      };
-      return parsed;
+      // Treat the model's reply as hostile: reject unexpected fields before it goes anywhere.
+      const parsed = JSON.parse(r.choices[0]?.message?.content ?? '{}');
+      return validateAnalystReply(parsed, ctx);
     },
   };
 }

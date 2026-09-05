@@ -43,6 +43,10 @@ function makeSim() {
       case 'crash':
         void sim.quickCrash();
         return true;
+      case 'price-blip':
+      case 'blip':
+        void sim.runBlip(); // single-block scare → confirmation window holds, NO rescue
+        return true;
       case 'reset':
         sim.reset();
         return true;
@@ -70,7 +74,8 @@ async function main() {
 
     const sc = value('--scenario');
     if (sc) {
-      await sim.runRow(sc as AdversityId);
+      if (sc === 'price-blip' || sc === 'blip') await sim.runBlip();
+      else await sim.runRow(sc as AdversityId);
       console.log(JSON.stringify(sim.getState(), null, 2));
       process.exit(0);
     }

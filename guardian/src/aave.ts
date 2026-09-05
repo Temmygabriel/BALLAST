@@ -61,13 +61,17 @@ export function liveAaveSource(opts: {
   label?: string;
 }): PositionSource {
   let client: PublicClient | null = null;
+  const ensure = async () => {
+    if (!client) {
+      const { createPublicClient, http } = await loadViem();
+      client = createPublicClient({ transport: http(opts.rpcUrl) });
+    }
+    return client;
+  };
   return {
     async getPosition(): Promise<Position> {
-      if (!client) {
-        const { createPublicClient, http } = await loadViem();
-        client = createPublicClient({ transport: http(opts.rpcUrl) });
-      }
-      const r = await client.readContract({
+      const c = await ensure();
+      const r = await c.readContract({
         address: opts.pool as `0x${string}`,
         abi: poolAbi,
         functionName: 'getUserAccountData',
@@ -81,6 +85,10 @@ export function liveAaveSource(opts: {
         decimals: opts.decimals,
         debtAssetName: opts.assetName,
       };
+    },
+    async getBlockNumber(): Promise<number> {
+      const c = await ensure();
+      return Number(await c.getBlockNumber());
     },
   };
 }

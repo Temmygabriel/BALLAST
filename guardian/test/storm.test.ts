@@ -44,4 +44,30 @@ describe('the storm (offline end-to-end)', () => {
     },
     30_000, // the storm animates with real sleeps
   );
+
+  it(
+    'a single-block price blip (flash-loan shape) NEVER fires a rescue',
+    async () => {
+      const engine = new SimEngine();
+      const statuses: string[] = [];
+      let last = engine.getState();
+      engine.subscribe((s) => {
+        last = s;
+        statuses.push(s.status);
+      });
+
+      await engine.runBlip(); // one low reading, then the price reverts before block 2
+
+      // The needle DIPPED into the red (the screen shows the scare)…
+      expect(statuses).toContain('CAPSIZING');
+      // …but a single block is never acted on: no rescue, no RESCUED, no tx.
+      expect(statuses).not.toContain('RESCUED');
+      expect(last.lastTx).toBeUndefined();
+      expect(last.healthFactor).toBeGreaterThanOrEqual(1.29); // healthy again
+      const log = last.log.map((l) => `${l.event}: ${l.detail}`).join('\n');
+      expect(log).not.toContain('rescuing');
+      expect(log).not.toContain('RESCUED');
+    },
+    20_000, // runBlip animates with real delays
+  );
 });

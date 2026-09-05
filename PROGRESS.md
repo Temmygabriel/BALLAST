@@ -2,7 +2,7 @@
 
 > Simple running log. Updated every session so you (and your future self) always know where things stand.
 
-**Today's date:** 2026-09-04
+**Today's date:** 2026-09-05
 **Build window:** Sep 6–18 · **Submit by:** Sep 18, 12:00 CEST
 **Repo:** https://github.com/Temmygabriel/BALLAST
 
@@ -54,12 +54,29 @@ else stays clean. This is what the judges want to see.
 - [ ] **Foundry install attempt** (best-effort; for real chain-fork chaos later)
 - [ ] **GitHub Actions CI** (so tests+build run in the cloud, not your PC)
 - [ ] **Real-browser visual pass** on the Ballast gauge (needle zones, storm, rescue swing)
-- [ ] **🚀 Cloud engine on Vercel** — engine riding inside the app at `/api/guardian`, so the
-      deployed link is LIVE for anyone (no localhost). IN PROGRESS.
-- [ ] **🔐 Security-hardening addendum** (`ballast-security-hardening.md` arrived) — P0/P1 items
-      queued: stable per-episode idempotency key, tick in-flight lock, pre-execution
-      revalidation, post-execution HF verify, two-block confirmation, MEV claim softening,
-      LLM output schema validation, README claim fixes, extra chaos rows.
+- [x] **🚀 Cloud engine on Vercel** — engine riding inside the app at `/api/guardian`. VERIFIED
+      LIVE: a full storm POSTed to the public URL landed **RESCUED @ HF 1.30**, all chaos rows
+      baseline fail / ballast pass. (Build had failed: `vercel.json` `rootDirectory` was rejected
+      by Vercel's schema — deleted the file; Root Directory was already set in the dashboard.)
+- [ ] **🔐 Security-hardening addendum** (`ballast-security-hardening.md`) — FIRST TRANCHE
+      CODED LOCALLY (not yet committed/pushed): `src/trigger.ts` TriggerGate (two-block
+      confirmation + explicit emergency bypass, stable episode id), stable per-episode
+      idempotency keys + TOCTOU re-validation + post-execution HF verify + private-routing
+      fail-closed in `rescue.ts`, LLM output schema validation in `composer.ts`, sim AND live
+      monitor wired through the gate (`simulator.ts`, `monitor.ts`, `aave.ts` block read).
+      Typecheck clean. **Deferred by the user until live mode works** — remaining: extra
+      hardening tests, `price-blip` scenario dispatch (cli/route/DevDeck), README claim fixes.
+- [x] **🔌 LIVE RESCUE LANDED on real Sepolia via KeeperHub** 🎉 (2026-09-05) — real Aave v3
+      position built near-liquidation (HF **1.0417**), `npm run live` confirmed it across two
+      blocks and repaid ~$6.93 USDC through KeeperHub to bring the position back to the 1.30
+      target — **HF 1.0417 → 1.3000 verified on-chain**. Guardian's own executions:
+      approve `9j2pfnljbb7wtykao04gx` → `0xe877cdffe2e254655b24f2f09d38db9444e541ce2e15c7b4e13091050f695dfe`;
+      **repay `sxux4wnpqqs1wc1eolzzk` → `0xe3f9c6c682eea3b11549bac90f2131806eea5b9b80e07f6692bb1719b96d1c3f`**
+      (block 11637895, `from` = KeeperHub sponsored relayer `0xa17cb6…`). Two env.ts bugs found
+      + fixed live (fileURLToPath %20 + inline-comment stripping); keeperhub.ts adapter bug fixed
+      (MCP returns `content[0].text` JSON, no `structuredContent`; real execute returns
+      `executionId/status/transactionHash/transactionLink`, `status:"completed"` immediately,
+      `sponsored:true`).
 
 ## Log
 
@@ -123,9 +140,104 @@ else stays clean. This is what the judges want to see.
   Also noted: `ballast-security-gameability-review.md` exists as the fuller review it came from.
 - npm reinstall ran (new `guardian` workspace dep) — done, exit 0.
 
+### 2026-09-04 — Cloud engine LIVE on Vercel 🎉
+- First cloud-engine deploy (commit `1aa4561`) **failed on Vercel**: `vercel.json` at repo root
+  had `rootDirectory: "ballast"`, which Vercel's schema rejected ("should NOT have additional
+  property `rootDirectory`") → every build aborted before compiling. Root cause: the project's
+  Root Directory was **already set to `ballast` in the Vercel dashboard** from the original
+  deploy, so the file was redundant AND fatal.
+- Fix: deleted `vercel.json` (commit `5b28884`). Redeploy went **green**.
+- **Verified live on https://ballast-green.vercel.app**: `GET /api/guardian/state` →
+  STEADY HF 1.3333, engine sim; **POST /api/guardian/scenario {name:storm} → RESCUED @
+  HF 1.2999, tick 45**, all 4 chaos rows baseline fail / ballast pass, MEV honestly skip,
+  keeper log shows dry-run → approve → repay → RESCUED. The deployed page now shows a real
+  engine (no BRIDGE DARK).
+- Honest caveat (by design): Vercel serverless = in-memory sim state lives per warm instance;
+  a cold start returns to a fresh STEADY bridge. Fine for a demo, and the screen never lies.
+
+### 2026-09-04 — Security hardening first tranche coded + LIVE wiring begun 🔐🔌
+- **Hardening (task #13) first tranche coded locally** (typecheck clean, NOT yet committed):
+  new `guardian/src/trigger.ts` (TriggerGate — a rescue needs TWO low reads on DIFFERENT
+  blocks to fire, below `EMERGENCY_HF` it acts now; episode id anchored to the first low
+  block, reused for every retry so KeeperHub idempotency keys stay stable);
+  `rescue.ts` fully rewritten (per-episode keys `${episodeId}::i::fingerprint`, TOCTOU
+  re-read + `rescueStillValid` before each broadcast, post-execution HF verification with
+  a loud ⚠ when a confirmed tx did NOT improve the position, private-routing check that
+  fails CLOSED when an action requires privacy); `composer.ts` now runs every analyst reply
+  (incl. the LLM) through `validateAnalystReply` (rejects unexpected fields / amounts above
+  policy / bad addresses; rationale display-only); `keeperhub.ts` + types gain
+  `supportsPrivateRouting`. Simulator + live monitor both wired through the gate with a
+  virtual/live block per observation; `aave.ts` live source can now read the block number.
+- **User redirected: get LIVE working first, finish hardening after.** So live wiring began.
+- **Local Sepolia wallet created offline** (`guardian/scripts/new-wallet.mjs`):
+  **`0x2DcA7aDD570F2E2D81fE86098B51128bC528bC15`** — private key saved only in
+  `guardian/.env` (gitignored). Script reusable; never stores a key if one exists.
+- **`guardian/.env` filled**: RPC_URL (Alchemy — user first pasted the MAINNET endpoint,
+  I fixed it to `eth-sepolia`; same key, network lives in the URL path), CHAIN_ID 11155111,
+  AAVE_POOL `0x6Ae43d3271ff6888e7Fc43Fd7321a503ff738951` + Circle USDC
+  `0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238` (both VERIFIED via web, 2026-09-04),
+  PROTECTED_WALLET, KEEPERHUB_MCP_URL=`https://app.keeperhub.com/mcp` +
+  KEEPERHUB_API_KEY=`kh_…`. DeepSeek still blank (deterministic fallback is fine).
+- **Funds confirmed on-chain** (`guardian/scripts/check-balances.mjs`, read-only public
+  RPC): protected wallet **0.02 ETH + 20 USDC**; KeeperHub execution wallet
+  **0x851a05FA306080Fd6bA9D961BDf9DD6cca29CA32 has 0 USDC** (needs test USDC before a
+  real repay demo).
+- **Creds verified end-to-end** (`guardian/scripts/verify-live.mjs`, connects exactly like
+  LiveKeeperHub): RPC reads Sepolia **block #11,634,500** + wallet balance; **kh_ key
+  connects to the KeeperHub MCP — 44 tools**. So `guardian live` should just work.
+- **KeeperHub org state (this chat's MCP)**: re-authorized after token expiry. Org has ONE
+  web3 wallet integration = the execution wallet above. Balance-read actions
+  (`web3/check-balance`) are NOT directly executable (501 → need a workflow), hence the
+  local public-RPC checker.
+- Architecture note (answering "shouldn't this be in Vercel?"): the deployed Vercel app
+  stays the SIM demo (safe, keyless, judge-proof). guardian/.env drives the REAL guardian
+  running locally (`npm run live`). Vercel env vars (dashboard) + a code switch would be a
+  separate "cloud-live" step; serverless isn't a great home for an always-on watcher.
+
 ### Next up
-- **Finish + verify the Vercel cloud engine** (typecheck/build → local smoke of `/api/guardian`
-  → push → Vercel auto-redeploys → I fetch the public URL to confirm it's live). Then YOU press
-  "Run the full storm" on the deployed page.
-- **Apply security hardening** (task #13, P0 first) with all 25 tests still green.
-- Write the README, GitHub Actions CI, Foundry attempt, real live-wiring (post-creds).
+1. **Finish security hardening** (task #13): add the new tests (trigger gate, blip no-rescue,
+   TOCTOU abort, post-exec flag, hostile-LLM fallback, private-routing fail-closed,
+   idempotent retry), wire `price-blip` into cli/route/DevDeck, run full tests + typecheck,
+   fix README claims, then commit+push. (README/`PROGRESS.md` live-rescue claims must reflect
+   the landed tx.)
+2. Write README (#10) with the REAL audit trail above, GitHub Actions CI (#11), Foundry
+   attempt (#8), real-browser pass (#9).
+3. Optional flourish: re-run the demo in fresh form — the position is currently healthy at
+   HF 1.30 after the rescue, so build-position (now a no-op, already supplied/borrowed) needs a
+   fresh borrow to create a new near-liquidation episode if we want to re-film the rescue.
+
+### 2026-09-05 — 🎉 LIVE RESCUE LANDED: real USDC moved through KeeperHub
+- **Built a real, near-liquidation Aave v3 position** (`guardian/scripts/build-position.mjs`)
+  on the protected wallet `0x2DcA7a…`: wrapped 0.011 ETH → the pool's LISTED WETH
+  `0xc558db…`, supplied it as collateral (~$44), borrowed the pool's LISTED USDC
+  `0x94a9d9…` (NOT Circle's `0x1c7D4B…` — probe proved the difference) near the LTV cap
+  → **HF 1.0417** (under the 1.05 action line, over the 1.01 emergency line). Funded the
+  KeeperHub execution wallet `0x851a05…` with **8,656,155 raw listed USDC (~$8.66)**.
+- **Ran `npm run live`** — it read HF 1.042, confirmed across two blocks (episode
+  `ballast-0x2DcA7a-11637891`), and landed the rescue through KeeperHub.
+- **Verified on-chain after:** collateral $44.00 (untouched) · debt $34.85 → **$27.92** ·
+  **HF 1.0417 → 1.3000** (exactly the guardian's target). Repay receipt status success,
+  block 11637895, `from` 0xa17cb6… = KeeperHub's **sponsored relayer** (`sponsored:true`).
+- **Full KeeperHub audit trail** (via `list_executions`, org log):
+  | step | execution id | tx |
+  |---|---|---|
+  | approve (pre-check) | `3f4h6npzai3vxlzs1ea05` | `0x3ea20dca…1858cb2` |
+  | approve (guardian)  | `9j2pfnljbb7wtykao04gx` | `0xe877cdff…695dfe` |
+  | repay (the rescue)  | `sxux4wnpqqs1wc1eolzzk` | `0xe3f9c6c6…96d1c3f` |
+- **Root cause of the original live failure — KeeperHub MCP response shape**: the raw
+  `callTool` reply has NO `structuredContent`; the real payload is JSON inside
+  `content[0].text`. `LiveKeeperHub.call` returned the wrapper, so every `r.success` was
+  undefined → every real call looked like it reverted ("dry-run blocked"). Fixed the adapter
+  to JSON-parse `content[].text`. Debug proof kept at `guardian/scripts/mcp-call-debug.mjs`.
+- **Two more live-found env.ts bugs**: `import.meta.url` `.pathname` keeps `%20` (repo folder
+  has a space → .env silently unread) → now `fileURLToPath`; inline comments after values
+  (`KEY=value  # note`) broke numeric parsing (NaN) → now stripped.
+- **Real execute response fields** (debug script `mcp-exec-debug.mjs`): returns
+  `{executionId, status, transactionHash, transactionLink}` with `status:"completed"`
+  immediately; `get_direct_execution_status` adds `receipts[].verified:true` +
+  `sponsored:true`. Adapter `auditUrl` now maps `transactionLink`.
+- **Background-tasks gotcha**: `TaskStop` on `npm run live` orphaned the `tsx` child holding
+  port 4300 → next start died `EADDRINUSE`. Killed the orphan (PowerShell
+  `Get-NetTCPConnection -LocalPort 4300`) before restarting.
+- Guardian process still watching (position now healthy → STEADY); repo work uncommitted
+  (env.ts/keeperhub.ts fixes + these scripts) — commit after the hardening tranche.

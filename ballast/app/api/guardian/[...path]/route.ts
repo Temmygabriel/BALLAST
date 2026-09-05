@@ -55,6 +55,10 @@ async function run(name: string, sim: SimEngine): Promise<boolean> {
     case 'crash':
       await sim.quickCrash();
       return true;
+    case 'price-blip':
+    case 'blip':
+      await sim.runBlip(); // single-block scare → confirmation window holds, NO rescue
+      return true;
     case 'reset':
       sim.reset();
       return true;

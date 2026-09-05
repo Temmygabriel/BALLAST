@@ -94,11 +94,23 @@ export interface RescueOutcome {
   trail?: string[];
   /** The position AFTER a successful repay (for the engine to store). */
   finalPosition?: Position;
+  /**
+   * Post-execution health-factor check (hardening §P0-4). `improved === false` means
+   * the tx confirmed but the position did not actually improve — surfaced, never
+   * silently accepted. Absent when no live re-read was available (offline).
+   */
+  verification?: { improved: boolean; note: string };
 }
 
 /** Something that can tell us the current position (live Aave OR the simulator). */
 export interface PositionSource {
   getPosition(): Promise<Position>;
+  /**
+   * Latest confirmed block number — anchors TriggerGate observations so a live
+   * monitor confirms a low reading across TWO DIFFERENT blocks (flash-loan guard).
+   * Absent on sources with no chain (offline). Optional so offline code stays light.
+   */
+  getBlockNumber?(): Promise<number>;
 }
 
 /* ── KeeperHub adapter surface (implemented live in keeperhub.ts, offline as MockKeeperHub) ── */
@@ -131,9 +143,16 @@ export interface ExecResult {
 /** The one seam Ballast uses to reach KeeperHub (mock OR live). */
 export interface KeeperHub {
   simulate(call: ContractCall): Promise<SimResult>;
-  /** Execute one call; retry/backoff/private-routing live inside an implementation. */
+  /** Execute one call; retry/backoff live inside an implementation. */
   execute(call: ContractCall, idempotencyKey: string): Promise<ExecResult>;
   waitForTx(executionId: string): Promise<ExecResult>;
+  /**
+   * Whether the target chain + execution surface actually provides private /
+   * MEV-protected routing. Checked and logged per execution — never assumed
+   * (hardening §P1-6). When an action REQUIRES privacy and this is false, the
+   * guardian fails closed instead of executing unprotected.
+   */
+  supportsPrivateRouting(network: string): Promise<boolean>;
 }
 
 /** An injected disaster the naive baseline trips over but Ballast survives. */

@@ -6,6 +6,7 @@ import type { InstrumentState } from '../lib/types';
 const SCENARIOS: Array<{ id: string; label: string; mainnetOnly?: boolean }> = [
   { id: 'storm', label: 'Full storm' },
   { id: 'price-crash', label: 'price crash' },
+  { id: 'price-blip', label: 'price blip (no rescue)' },
   { id: 'gas-spike', label: 'gas spike' },
   { id: 'nonce-collision', label: 'nonce clash' },
   { id: 'would-be-revert', label: 'bad repay' },
