@@ -186,12 +186,17 @@ export async function attemptRescue(deps: RescueDeps): Promise<RescueOutcome> {
     const call = calls[i]!;
     const sim = await deps.keeper.simulate(call);
     if (!sim.success || sim.wouldRevert) {
-      step(`dry-run BLOCKED ${call.abiFunction} before broadcast (${sim.error ?? 'would revert'})`);
+      // success=false + wouldRevert=false means the simulator REJECTED the call
+      // (usually a malformed target address), not that the chain would revert it.
+      const why =
+        sim.error ??
+        (sim.wouldRevert ? 'would revert' : 'rejected by simulator — check the call targets a real contract');
+      step(`dry-run BLOCKED ${call.abiFunction} before broadcast (${why})`);
       return {
         ok: true, // nothing bad hit the chain
         landed: false,
         status: 'STEADY',
-        reason: `dry-run blocked ${call.abiFunction}: ${sim.error ?? 'would revert'}`,
+        reason: `dry-run blocked ${call.abiFunction}: ${why}`,
         repaidUnits: 0n,
         rationale: safe.rationale,
         trail,

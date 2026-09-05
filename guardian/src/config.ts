@@ -55,18 +55,30 @@ export function loadLiveConfig(): LiveConfig {
     if (!v) throw new Error(`[config] missing ${k} — copy guardian/.env.example to guardian/.env`);
     return v;
   };
+  /**
+   * Dashboard pastes often drag in a trailing `  # comment` or stray whitespace —
+   * a real footgun that silently breaks a call. Strip comments/space, and force
+   * ADDRESSES to lowercase: the all-lowercase form passes every parser, so a wrongly
+   * checksummed mixed-case paste can never bite again.
+   */
+  const val = (k: string): string => need(k).replace(/\s+#.*$/, '').trim();
+  const addr = (k: string): string => val(k).toLowerCase();
+  const decRaw = (process.env.DEBT_ASSET_DECIMALS ?? String(DEFAULTS.debtAssetDecimals)).replace(/\s+#.*$/, '').trim();
+  const dec = Number(decRaw);
+  const pollRaw = (process.env.POLL_MS ?? String(DEFAULTS.pollMs)).replace(/\s+#.*$/, '').trim();
+  const poll = Number(pollRaw);
   return {
-    rpcUrl: need('RPC_URL'),
-    chainId: need('CHAIN_ID'),
-    aavePool: need('AAVE_POOL'),
-    debtAsset: need('DEBT_ASSET'),
-    debtAssetDecimals: Number(process.env.DEBT_ASSET_DECIMALS ?? DEFAULTS.debtAssetDecimals),
-    protectedWallet: need('PROTECTED_WALLET'),
+    rpcUrl: val('RPC_URL'),
+    chainId: val('CHAIN_ID'),
+    aavePool: addr('AAVE_POOL'),
+    debtAsset: addr('DEBT_ASSET'),
+    debtAssetDecimals: Number.isFinite(dec) ? dec : DEFAULTS.debtAssetDecimals,
+    protectedWallet: addr('PROTECTED_WALLET'),
     keeperhubMcpUrl: process.env.KEEPERHUB_MCP_URL,
     keeperhubApiKey: process.env.KEEPERHUB_API_KEY,
     deepseekApiKey: process.env.DEEPSEEK_API_KEY,
     deepseekBaseUrl: process.env.DEEPSEEK_BASE_URL,
     deepseekModel: process.env.DEEPSEEK_MODEL,
-    pollMs: Number(process.env.POLL_MS ?? DEFAULTS.pollMs),
+    pollMs: Number.isFinite(poll) ? poll : DEFAULTS.pollMs,
   };
 }

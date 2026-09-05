@@ -169,7 +169,15 @@ export class LiveKeeperHub implements KeeperHub {
       ...LiveKeeperHub.txArgs(call),
       simulate: true, // JSON boolean — nothing is broadcast
     });
-    return { success: !!r?.success, wouldRevert: !!r?.wouldRevert, error: r?.error };
+    // Surface the real reply when it's a rejection rather than a clean on-chain
+    // revert — a malformed address (success=false, wouldRevert=false) must not read
+    // like a genuine "would revert", because it has a different fix.
+    const unexplained = !r || (r.success === undefined && r.wouldRevert === undefined);
+    return {
+      success: !!r?.success,
+      wouldRevert: !!r?.wouldRevert,
+      error: r?.error ?? (unexplained ? JSON.stringify(r).slice(0, 200) : undefined),
+    };
   }
 
   /**

@@ -28,7 +28,7 @@ In **Vercel dashboard → ballast-green → Settings → Environment Variables**
 | `RPC_URL` | your Alchemy **Sepolia** endpoint (from `guardian/.env`) |
 | `CHAIN_ID` | `11155111` |
 | `AAVE_POOL` | `0x6Ae43d3271ff6888e7Fc43Fd7321a503ff738951` |
-| `DEBT_ASSET` | Aave-listed USDC `0x94a9d9AC8a22534E3FaCa9F4e7F2E2cf85d5E4C8` |
+| `DEBT_ASSET` | Aave-listed USDC `0x94a9d9ac8a22534e3faca9f4e7f2e2cf85d5e4c8` |
 | `DEBT_ASSET_DECIMALS` | `6` |
 | `PROTECTED_WALLET` | `0x2DcA7aDD570F2E2D81fE86098B51128bC528bC15` |
 | `KEEPERHUB_MCP_URL` | `https://app.keeperhub.com/mcp` |

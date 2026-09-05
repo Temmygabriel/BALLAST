@@ -27,7 +27,13 @@ import { attemptRescue } from './rescue';
 import { initialState, patch, snapshotOf, statusOfHealthFactor, withLog } from './state';
 import type { InstrumentState, KeeperHub, Position, RescueOutcome, Thresholds } from './types';
 
-const num = (v: string | undefined, dflt: number) => (v === undefined ? dflt : Number(v));
+// Dashboard pastes can drag in a trailing ` # comment` — never let Number() turn
+// that into NaN (a NaN maxUnits would crash the service at construction).
+const num = (v: string | undefined, dflt: number) => {
+  if (v === undefined) return dflt;
+  const n = Number(String(v).replace(/\s+#.*$/, '').trim());
+  return Number.isFinite(n) ? n : dflt;
+};
 
 function envThresholds(): Thresholds {
   return {
