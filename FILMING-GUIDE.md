@@ -44,7 +44,11 @@ Push (or redeploy) so Vercel builds with these. **The sim demo is the default wh
 ### 3. (Only for a filmed RESCUE) give the guardian something to save
 After the earlier real rescue the position is **healthy (HF ≈ 1.30)** — pressing RESCUE NOW then honestly answers *"nothing to rescue."* That's a fine beat, but for the money-shot you want the needle **in the red**, so **re-borrow ~$7 of USDC** against the same collateral to push HF to ≈ **1.04** (below the 1.05 act line, above the 1.01 emergency edge).
 
-> Say the word and I'll add a tiny helper — `guardian/scripts/borrow-more.mjs` — that does exactly this to a target HF. Until then, `build-position.mjs` is a no-op because you're already supplied/borrowed.
+> Ready-made helper: `guardian/scripts/borrow-more.mjs` (optionally takes a target HF, default
+> ≈ 1.04) borrows just enough listed-USDC against the existing collateral to land there, then
+> tops up the KeeperHub execution wallet for the follow-up rescue. It does NOT overshoot below
+> the emergency line by design. **Only run it when a rescue path is armed and ready to fire right
+> after** — parked near-liquidation positions are dangerous.
 
 ---
 
