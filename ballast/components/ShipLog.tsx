@@ -18,10 +18,28 @@ function colorOf(e: LogEntry['event']): string {
 
 /** The ship's log — chronological, oldest at top, auto-sails to the newest line. */
 export default function ShipLog({ entries }: { entries: LogEntry[] }) {
-  const endRef = useRef<HTMLDivElement | null>(null);
+  const listRef = useRef<HTMLDivElement | null>(null);
+  // Whether the reader is already at the newest line. We only auto-sail while
+  // they are — never yank the box away from someone reading older entries.
+  const stickRef = useRef(true);
 
   useEffect(() => {
-    endRef.current?.scrollIntoView({ block: 'nearest' });
+    const el = listRef.current;
+    if (!el) return;
+    const onScroll = () => {
+      stickRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 24;
+    };
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => el.removeEventListener('scroll', onScroll);
+  }, []);
+
+  useEffect(() => {
+    if (stickRef.current && listRef.current) {
+      // Scroll only this box to its newest line. Never scrollIntoView — that
+      // scrolls every ancestor (the whole page) to reveal the line, which made
+      // the screen roll down on its own while a storm streamed log entries.
+      listRef.current.scrollTop = listRef.current.scrollHeight;
+    }
   }, [entries.length]);
 
   const fmt = (s: Status | string) => s;
@@ -32,7 +50,7 @@ export default function ShipLog({ entries }: { entries: LogEntry[] }) {
         <h2 className="card-title">SHIP&rsquo;S LOG</h2>
         <span className="card-count mono">{entries.length} entries</span>
       </header>
-      <div className="log-list mono">
+      <div className="log-list mono" ref={listRef}>
         {entries.length === 0 ? <div className="log-empty">— no entries yet —</div> : null}
         {entries.map((e, i) => (
           <div className="log-line" key={i}>
@@ -43,7 +61,6 @@ export default function ShipLog({ entries }: { entries: LogEntry[] }) {
             <span className="log-detail">{e.detail}</span>
           </div>
         ))}
-        <div ref={endRef} />
       </div>
     </section>
   );
