@@ -74,6 +74,17 @@ export default function Page() {
 
   const hasEngine = Boolean(state);
 
+  // A panel may only be drawn once its snapshot actually belongs to the engine
+  // the switch points at. Right after a toggle the old engine's snapshot is still
+  // in the dial for a beat — showing its panel then is what made LIVE and SIM look
+  // like they were crashing into each other. So while the requested engine is
+  // lining up, we hold a quiet "switching" card instead of a mismatched panel.
+  const asksSim = view === 'sim';
+  const asksLive = view === 'auto' && sawLive;
+  const mismatched =
+    Boolean(state) &&
+    ((asksSim && state!.engineMode !== 'sim') || (asksLive && state!.engineMode !== 'live'));
+
   return (
     <div className="app" data-storm={state?.stormActive ? 'true' : undefined}>
       <TopBar
@@ -85,12 +96,21 @@ export default function Page() {
         onView={onView}
       />
       <main className="console">
-        {hasEngine ? (
-          <Bridge state={state as InstrumentState} onScenario={ingest} base={active} />
-        ) : (
+        {!hasEngine ? (
           <div className="offline-wrap">
             <EngineOffline retry={retry} />
           </div>
+        ) : mismatched ? (
+          <div className="offline-wrap" style={{ minHeight: '46vh' }}>
+            <div className="offline">
+              <p className="offline-code mono">
+                {asksSim ? 'switching to the SIM engine…' : 'switching to the LIVE engine…'}
+              </p>
+              <p className="offline-sub">lining up — the dial will settle in a second</p>
+            </div>
+          </div>
+        ) : (
+          <Bridge state={state as InstrumentState} onScenario={ingest} base={active} />
         )}
       </main>
       <footer className="foot mono">

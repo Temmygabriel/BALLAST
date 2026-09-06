@@ -15,6 +15,11 @@
  * "/api/guardian/sim" for the synthetic sandbox on a live-armed deploy). When
  * omitted, guardianBase() picks the default: the standalone guardian on this PC,
  * or the same-origin /api/guardian on the deployed app.
+ *
+ * Switching engines (the LIVE ⇄ SIM switch) swaps `engineBase`. A generation
+ * counter makes that switch atomic: responses that arrive from the PREVIOUS
+ * engine after the switch are ignored, so the LIVE and SIM interfaces can never
+ * overwrite each other mid-flip.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { InstrumentState } from './types';
@@ -41,6 +46,10 @@ export function useGuardianState(engineBase?: string) {
   const [reconnecting, setReconnecting] = useState(false);
   const pollRef = useRef<number | null>(null);
   const esRef = useRef<EventSource | null>(null);
+  // Bumped on every stop/start. Async work captures the generation it started
+  // under and bails if it has moved on — so a late response from the engine we
+  // just left cannot clobber the engine we switched to.
+  const genRef = useRef(0);
 
   /** Adopt a full state snapshot (from SSE, a poll, or a scenario POST body). */
   const ingest = useCallback((s: InstrumentState | null) => {
@@ -51,22 +60,27 @@ export function useGuardianState(engineBase?: string) {
   }, []);
 
   const fetchState = useCallback(async () => {
+    const gen = genRef.current;
     try {
       const r = await fetch(`${base}/state`);
+      if (gen !== genRef.current) return; // engine switched while this was in flight
       if (r.ok) {
         const d = (await r.json()) as { state?: InstrumentState | null };
+        if (gen !== genRef.current) return;
         if (d?.state) ingest(d.state);
       } else {
         setConnected(false);
         setReconnecting(true);
       }
     } catch {
+      if (gen !== genRef.current) return;
       setConnected(false);
       setReconnecting(true);
     }
   }, [base, ingest]);
 
   const stop = useCallback(() => {
+    genRef.current++; // invalidate anything still in flight from the old engine
     if (pollRef.current !== null) {
       clearInterval(pollRef.current);
       pollRef.current = null;
@@ -80,6 +94,7 @@ export function useGuardianState(engineBase?: string) {
   const start = useCallback(() => {
     if (typeof window === 'undefined') return;
     stop();
+    const gen = genRef.current;
 
     if (base.startsWith(window.location.origin)) {
       // Cloud: engine is in this app — poll its snapshot. Cheap, reliable on
@@ -94,10 +109,12 @@ export function useGuardianState(engineBase?: string) {
     const es = new EventSource(`${base}/events`);
     esRef.current = es;
     es.onopen = () => {
+      if (gen !== genRef.current) return;
       setConnected(true);
       setReconnecting(false);
     };
     es.onmessage = (e) => {
+      if (gen !== genRef.current) return;
       if (e.data && e.data[0] === '{') {
         try {
           ingest(JSON.parse(e.data) as InstrumentState);
@@ -107,6 +124,7 @@ export function useGuardianState(engineBase?: string) {
       }
     };
     es.onerror = () => {
+      if (gen !== genRef.current) return;
       setConnected(false);
       setReconnecting(true);
     };
