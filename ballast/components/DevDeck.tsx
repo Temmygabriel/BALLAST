@@ -14,12 +14,19 @@ const SCENARIOS: Array<{ id: string; label: string; mainnetOnly?: boolean }> = [
 ];
 
 /** Demo controls — how a storm gets raised from the screen (sim mode only). */
-export default function DevDeck({ onScenario }: { onScenario?: (s: InstrumentState) => void }) {
+export default function DevDeck({
+  onScenario,
+  base,
+}: {
+  onScenario?: (s: InstrumentState) => void;
+  /** Engine namespace to raise storms on (defaults to this deploy's sim engine). */
+  base?: string;
+}) {
   const fire = async (name: string) => {
-    const base = guardianBase();
-    if (!base) return;
+    const b = base ?? guardianBase();
+    if (!b) return;
     try {
-      const r = await fetch(`${base}/scenario`, {
+      const r = await fetch(`${b}/scenario`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name }),

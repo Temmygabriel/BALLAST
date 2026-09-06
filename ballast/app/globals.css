@@ -80,6 +80,17 @@ body:has(.app[data-storm='true']) {
 @keyframes pulse { 50% { opacity: .55; } }
 .tick { font-size: 11px; color: var(--ivory-dim); opacity: .7; }
 
+/* LIVE ⇄ SIM engine switch */
+.mode-switch { display: inline-flex; border: 1px solid var(--panel-line); border-radius: 999px; overflow: hidden; }
+.mode-btn {
+  font-family: var(--mono); font-size: 10px; letter-spacing: .18em; padding: 4px 11px;
+  cursor: pointer; color: var(--ivory-dim); background: transparent; border: none;
+}
+.mode-btn + .mode-btn { border-left: 1px solid var(--panel-line); }
+.mode-btn:hover { color: var(--brass-hi); }
+.mode-btn[data-active='true'][data-mode='live'] { background: rgba(59,110,82,.85); color: #06140c; }
+.mode-btn[data-active='true'][data-mode='sim'] { background: var(--brass); color: var(--ink); }
+
 /* ── main layout ─────────────────────────────────────────────────── */
 .console { display: block; }
 main.console { flex: 1; }
@@ -118,6 +129,8 @@ main.console { flex: 1; }
 .lasttx { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 10px; font-size: 12px; color: var(--ivory-dim); flex-wrap: wrap; }
 .lasttx-label { color: var(--safe); letter-spacing: 0.2em; font-size: 10px; border: 1px solid rgba(59,110,82,.5); padding: 1px 6px; border-radius: 4px; }
 .lasttx-hash { color: var(--ivory); }
+.tx-link { text-decoration: none; }
+.tx-link:hover { text-decoration: underline; color: var(--safe); }
 .audit-link { font-size: 12px; }
 
 /* ── telemetry strip ─────────────────────────────────────────────── */

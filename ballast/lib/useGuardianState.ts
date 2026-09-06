@@ -10,6 +10,11 @@
  *    serverless-friendly and still animates a running storm.
  * Set NEXT_PUBLIC_GUARDIAN_URL to force a specific engine (e.g. a future real
  * live guardian). The screen never calls Aave or KeeperHub itself.
+ *
+ * A caller may pass `engineBase` to point at a specific engine namespace (e.g.
+ * "/api/guardian/sim" for the synthetic sandbox on a live-armed deploy). When
+ * omitted, guardianBase() picks the default: the standalone guardian on this PC,
+ * or the same-origin /api/guardian on the deployed app.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { InstrumentState } from './types';
@@ -27,7 +32,10 @@ export function guardianBase(): string {
   return 'http://localhost:4300'; // this PC: standalone guardian
 }
 
-export function useGuardianState() {
+export function useGuardianState(engineBase?: string) {
+  // `base` may differ from guardianBase() when the page is showing a specific
+  // engine (SIM on a live deploy). Effects below re-subscribe when it changes.
+  const base = engineBase ?? guardianBase();
   const [state, setState] = useState<InstrumentState | null>(null);
   const [connected, setConnected] = useState(false);
   const [reconnecting, setReconnecting] = useState(false);
@@ -44,7 +52,7 @@ export function useGuardianState() {
 
   const fetchState = useCallback(async () => {
     try {
-      const r = await fetch(`${guardianBase()}/state`);
+      const r = await fetch(`${base}/state`);
       if (r.ok) {
         const d = (await r.json()) as { state?: InstrumentState | null };
         if (d?.state) ingest(d.state);
@@ -56,7 +64,7 @@ export function useGuardianState() {
       setConnected(false);
       setReconnecting(true);
     }
-  }, [ingest]);
+  }, [base, ingest]);
 
   const stop = useCallback(() => {
     if (pollRef.current !== null) {
@@ -71,7 +79,6 @@ export function useGuardianState() {
 
   const start = useCallback(() => {
     if (typeof window === 'undefined') return;
-    const base = guardianBase();
     stop();
 
     if (base.startsWith(window.location.origin)) {
@@ -103,7 +110,7 @@ export function useGuardianState() {
       setConnected(false);
       setReconnecting(true);
     };
-  }, [stop, fetchState, ingest]);
+  }, [base, stop, fetchState, ingest]);
 
   useEffect(() => {
     start();

@@ -2,6 +2,13 @@
 
 import type { InstrumentState } from '../lib/types';
 
+/**
+ * Where a real tx hash opens. This deploy is Sepolia, so that is the default;
+ * set NEXT_PUBLIC_EXPLORER_URL when a deploy ever points at another chain.
+ * Sim-mode hashes are synthetic — they are never linked.
+ */
+const EXPLORER = (process.env.NEXT_PUBLIC_EXPLORER_URL ?? 'https://sepolia.etherscan.io').replace(/\/+$/, '');
+
 const WORD = {
   STEADY: { color: 'var(--safe)', line: 'all plain sailing' },
   LISTING: { color: 'var(--warn)', line: 'heeled over — keeping watch' },
@@ -33,7 +40,18 @@ export default function StatusPlate({ state }: { state: InstrumentState }) {
       {state.lastTx ? (
         <div className="lasttx mono">
           <span className="lasttx-label">TX</span>
-          <span className="lasttx-hash">{state.lastTx.hash}</span>
+          {state.engineMode === 'live' && state.lastTx.hash ? (
+            <a
+              className="lasttx-hash tx-link"
+              href={`${EXPLORER}/tx/${state.lastTx.hash}`}
+              target="_blank"
+              rel="noreferrer"
+            >
+              {state.lastTx.hash}
+            </a>
+          ) : (
+            <span className="lasttx-hash">{state.lastTx.hash}</span>
+          )}
           {state.lastTx.auditUrl ? (
             <a className="audit-link" href={state.lastTx.auditUrl} target="_blank" rel="noreferrer">
               audit ↗

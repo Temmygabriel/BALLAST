@@ -6,8 +6,14 @@
  * Ballast never calls Aave or KeeperHub — it only reads state the guardian
  * computed. When the engine is silent the page honestly says "bridge dark";
  * there is no fake data hiding in this UI.
+ *
+ * On a LIVE-armed deploy the same URL also hosts the SIM sandbox (a synthetic
+ * storm demo under /api/guardian/sim). Once the real engine is seen, a small
+ * LIVE ⇄ SIM switch appears in the top bar: SIM points the gauge at the sandbox,
+ * LIVE points it back at the real position. Sim state is always labelled sim.
  */
-import { useGuardianState } from '../lib/useGuardianState';
+import { useEffect, useState } from 'react';
+import { useGuardianState, guardianBase } from '../lib/useGuardianState';
 import type { InstrumentState } from '../lib/types';
 import TopBar from '../components/TopBar';
 import Inclinometer from '../components/Inclinometer';
@@ -19,7 +25,15 @@ import DevDeck from '../components/DevDeck';
 import LivePanel from '../components/LivePanel';
 import EngineOffline from '../components/EngineOffline';
 
-function Bridge({ state, onScenario }: { state: InstrumentState; onScenario: (s: InstrumentState) => void }) {
+function Bridge({
+  state,
+  onScenario,
+  base,
+}: {
+  state: InstrumentState;
+  onScenario: (s: InstrumentState) => void;
+  base: string;
+}) {
   const isLive = state.engineMode === 'live';
   return (
     <>
@@ -32,7 +46,7 @@ function Bridge({ state, onScenario }: { state: InstrumentState; onScenario: (s:
       </div>
 
       <div className="side-column">
-        {isLive ? <LivePanel onState={onScenario} /> : <DevDeck onScenario={onScenario} />}
+        {isLive ? <LivePanel onState={onScenario} /> : <DevDeck base={base} onScenario={onScenario} />}
         {isLive ? null : <StormConditions state={state} />}
         <ShipLog entries={state.log} />
       </div>
@@ -41,7 +55,23 @@ function Bridge({ state, onScenario }: { state: InstrumentState; onScenario: (s:
 }
 
 export default function Page() {
-  const { state, connected, retry, ingest } = useGuardianState();
+  // 'auto' = the default engine for this deploy (LIVE when armed, SIM otherwise).
+  // 'sim'  = the synthetic sandbox, reachable under /api/guardian/sim.
+  const [view, setView] = useState<'auto' | 'sim'>('auto');
+  // Becomes true once we've seen the real engine at the default endpoint — only
+  // then does a LIVE ⇄ SIM switch make sense on this deploy.
+  const [sawLive, setSawLive] = useState(false);
+
+  const base = guardianBase();
+  const active = view === 'sim' ? `${base}/sim` : base;
+  const { state, connected, retry, ingest } = useGuardianState(active);
+
+  useEffect(() => {
+    if (state?.engineMode === 'live') setSawLive(true);
+  }, [state]);
+
+  const onView = (v: 'live' | 'sim') => setView(v === 'live' ? 'auto' : 'sim');
+
   const hasEngine = Boolean(state);
 
   return (
@@ -50,10 +80,13 @@ export default function Page() {
         engineMode={state?.engineMode}
         connected={connected && hasEngine}
         tick={state?.tick ?? 0}
+        view={view}
+        canSim={sawLive}
+        onView={onView}
       />
       <main className="console">
         {hasEngine ? (
-          <Bridge state={state as InstrumentState} onScenario={ingest} />
+          <Bridge state={state as InstrumentState} onScenario={ingest} base={active} />
         ) : (
           <div className="offline-wrap">
             <EngineOffline retry={retry} />
